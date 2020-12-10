@@ -147,6 +147,7 @@ public class JqmBaseTest
                 mavenBundle("com.enioka.jqm", "jqm-pki").versionAsInProject(),
                 mavenBundle("com.enioka.jqm", "jqm-admin").versionAsInProject(),
                 mavenBundle("com.enioka.jqm", "jqm-model").versionAsInProject(),
+                mavenBundle("com.enioka.jqm", "jqm-model-osgi").versionAsInProject(),
                 mavenBundle("com.enioka.jqm", "jqm-impl-hsql").versionAsInProject(),
                 mavenBundle("com.enioka.jqm", "jqm-impl-pg").versionAsInProject(),
                 mavenBundle("com.enioka.jqm", "jqm-engine").versionAsInProject(),

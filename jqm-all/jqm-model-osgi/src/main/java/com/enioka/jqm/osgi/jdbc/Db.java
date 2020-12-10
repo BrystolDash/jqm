@@ -1,4 +1,4 @@
-package com.enioka.jqm.jdbc;
+package com.enioka.jqm.osgi.jdbc;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -16,8 +16,12 @@ import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 
+import org.osgi.framework.BundleContext;
+import org.osgi.framework.ServiceReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.enioka.jqm.loader.Loader;
 
 /**
  * Entry point for all database-related operations, from initialization to schema upgrade, as well as creating sessions for querying the
@@ -125,7 +129,8 @@ public class Db
         }
         else
         {
-            // Standard case: fetch a DataSource from JNDI.
+            // Standard case: fetch a DataSource from our XML file, then JNDI.
+            // (in that order: JNDI depends on the database in out implementation... could be embarassing to do otherwise)
             String dsName = p.getProperty("com.enioka.jqm.jdbc.datasource", "jdbc/jqm");
             int retryCount = Integer.parseInt(p.getProperty("com.enioka.jqm.jdbc.initialRetries", "10"));
             int waitMs = Integer.parseInt(p.getProperty("com.enioka.jqm.jdbc.initialRetryWaitMs", "10000"));
@@ -234,13 +239,13 @@ public class Db
      *
      * @return a Properties object, which may be empty but not null.
      */
-    public static Properties loadProperties(String[] filesToLoad)
+    private static Properties loadProperties(String[] filesToLoad)
     {
         Properties p = new Properties();
 
         for (String path : filesToLoad)
         {
-            try (InputStream fis = Db.class.getClassLoader().getResourceAsStream(path))
+            try (InputStream fis = Db.class.getClassLoader().getSystemResourceAsStream(path))
             {
                 if (fis != null)
                 {
@@ -448,22 +453,25 @@ public class Db
             DatabaseMetaData meta = tmp.getMetaData();
             product = meta.getDatabaseProductName().toLowerCase();
 
-            for (String s : ADAPTERS)
+            try
             {
-                try
+                BundleContext context = org.osgi.framework.FrameworkUtil.getBundle(getClass()).getBundleContext();
+                Loader<DbAdapter> loader = new Loader<DbAdapter>(context, DbAdapter.class, "(Adapter-Type=*)");
+                loader.start();
+
+                for (ServiceReference<?> ref : loader.references)
                 {
-                    Class<? extends DbAdapter> clazz = Db.class.getClassLoader().loadClass(s).asSubclass(DbAdapter.class);
-                    newAdpt = clazz.newInstance();
-                    if (newAdpt.compatibleWith(meta))
+                    DbAdapter newAdapter = (DbAdapter) context.getService(ref);
+                    if (newAdapter.compatibleWith(meta))
                     {
-                        adapter = newAdpt;
+                        adapter = newAdapter;
                         break;
                     }
                 }
-                catch (Exception e)
-                {
-                    throw new DatabaseException("Issue when loading database adapter named: " + s, e);
-                }
+            }
+            catch (Exception e)
+            {
+                throw new DatabaseException("Issue when loading database adapter");
             }
         }
         catch (SQLException e)
